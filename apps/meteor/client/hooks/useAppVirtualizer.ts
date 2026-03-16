@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef } from 'react';
 
 const DEFAULT_OVERSCAN = 25;
 const END_REACHED_THRESHOLD = 5;
+/** When scroll position is within this many px of the bottom, also trigger onEndReached (fallback for spacer region). */
+const END_REACHED_SCROLL_THRESHOLD = 100;
 
 export type UseAppVirtualizerOptions<T = unknown> = {
 	/** Width of the scroll container (e.g. from useResizeObserver contentBoxSize.inlineSize) */
@@ -29,6 +31,11 @@ export type UseAppVirtualizerOptions<T = unknown> = {
 	overscan?: number;
 	/** Optional data array; when provided, each virtual item will have a .data property. */
 	items?: T[];
+	/**
+	 * When true, enable dynamic row height: pass measureElement as ref to each row node and set data-index
+	 * to the virtual item index. Do not set a fixed height on rows; use minHeight with estimateSize for initial layout.
+	 */
+	measure?: boolean;
 };
 
 export type AppVirtualItem<T = unknown> = VirtualItem & { data?: T };
@@ -46,6 +53,11 @@ export type UseAppVirtualizerResult<T = unknown> = {
 	scrollContainerRef: (element: HTMLElement | null) => void;
 	/** Scroll to a given index (e.g. for EmojiPicker category). */
 	scrollToIndex: (index: number, options?: { align?: 'start' | 'center' | 'end'; behavior?: 'auto' | 'smooth' }) => void;
+	/**
+	 * When measure option is true, attach this ref to each row root element and set data-index={virtualItem.index}
+	 * so the virtualizer can measure actual row height. Omit fixed height on the row; use minHeight for initial layout.
+	 */
+	measureElement?: (element: HTMLElement | null) => void;
 };
 
 function normalizeEstimateSize(estimateSize: number | ((index: number) => number), index: number): number {
@@ -64,10 +76,16 @@ export function useAppVirtualizer<T = unknown>(options: UseAppVirtualizerOptions
 		estimateSize,
 		overscan = DEFAULT_OVERSCAN,
 		items,
+		measure = false,
 	} = options;
 
 	const scrollRef = useRef<HTMLElement | null>(null);
 	const endReachedSentRef = useRef(false);
+	const prevCountRef = useRef(count);
+	const totalSizeRef = useRef(0);
+	const heightRef = useRef(0);
+	const onEndReachedRef = useRef(onEndReached);
+	const hasNextPageRef = useRef(hasNextPage);
 
 	const virtualizer = useVirtualizer({
 		count,
@@ -92,6 +110,20 @@ export function useAppVirtualizer<T = unknown>(options: UseAppVirtualizerOptions
 		totalCount != null && totalCount > count ? (totalCount - count) * sizePerItem : 0;
 	const totalSize = baseTotalSize + spacerSize;
 
+	totalSizeRef.current = totalSize;
+	heightRef.current = height;
+	onEndReachedRef.current = onEndReached;
+	hasNextPageRef.current = hasNextPage;
+
+	// Reset endReachedSentRef when more items were loaded so we can trigger the next page
+	useEffect(() => {
+		if (count > prevCountRef.current) {
+			endReachedSentRef.current = false;
+		}
+		prevCountRef.current = count;
+	}, [count]);
+
+	// Trigger onEndReached when last visible item index is near the end (existing logic)
 	useEffect(() => {
 		if (!onEndReached || count === 0 || virtualItems.length === 0) {
 			return;
@@ -110,6 +142,31 @@ export function useAppVirtualizer<T = unknown>(options: UseAppVirtualizerOptions
 		}
 	}, [count, hasNextPage, onEndReached, virtualItems]);
 
+	// Fallback: trigger onEndReached when scroll position is near the bottom (e.g. user scrolled into spacer)
+	useEffect(() => {
+		const el = scrollRef.current;
+		if (!el || !onEndReachedRef.current) {
+			return;
+		}
+		const handler = (): void => {
+			const scrollTop = el.scrollTop;
+			const total = totalSizeRef.current;
+			const h = heightRef.current;
+			if (total <= 0 || h <= 0) return;
+			const nearBottom = scrollTop + h >= total - END_REACHED_SCROLL_THRESHOLD;
+			if (!nearBottom) {
+				endReachedSentRef.current = false;
+				return;
+			}
+			if (hasNextPageRef.current && !endReachedSentRef.current) {
+				endReachedSentRef.current = true;
+				onEndReachedRef.current?.();
+			}
+		};
+		el.addEventListener('scroll', handler, { passive: true });
+		return () => el.removeEventListener('scroll', handler);
+	}, [count, totalSize, height]);
+
 	const scrollToIndex = useCallback(
 		(index: number, scrollOptions?: { align?: 'start' | 'center' | 'end'; behavior?: 'auto' | 'smooth' }) => {
 			virtualizer.scrollToIndex(index, scrollOptions);
@@ -126,5 +183,6 @@ export function useAppVirtualizer<T = unknown>(options: UseAppVirtualizerOptions
 		totalSize,
 		scrollContainerRef,
 		scrollToIndex,
+		...(measure && { measureElement: virtualizer.measureElement }),
 	};
 }
