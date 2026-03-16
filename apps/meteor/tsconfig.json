@@ -23,6 +23,8 @@
 			/* Support absolute /imports/* with a leading '/' */
 			"/*": ["*"],
 			"meteor/*": ["./node_modules/@types/meteor/*", ".meteor/local/types/packages.d.ts"],
+			"@tanstack/react-virtual": ["./node_modules/@tanstack/react-virtual"],
+			"@tanstack/react-virtual/*": ["./node_modules/@tanstack/react-virtual/*"],
 		},
 		"preserveSymlinks": true,
 
