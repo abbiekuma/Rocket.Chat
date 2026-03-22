@@ -4,59 +4,29 @@ import { useCallback, useEffect, useRef } from 'react';
 
 const DEFAULT_OVERSCAN = 25;
 const END_REACHED_THRESHOLD = 5;
-/** When scroll position is within this many px of the bottom, also trigger onEndReached (fallback for spacer region). */
 const END_REACHED_SCROLL_THRESHOLD = 100;
 
 export type UseAppVirtualizerOptions<T = unknown> = {
-	/** Width of the scroll container (e.g. from useResizeObserver contentBoxSize.inlineSize) */
 	width: number;
-	/** Height of the scroll container (e.g. from useResizeObserver contentBoxSize.blockSize) */
 	height: number;
-	/** Number of items currently loaded (e.g. items.length) */
 	count: number;
-	/** Total number of items from server (optional). When set, totalSize includes a spacer for unloaded items. */
 	totalCount?: number;
-	/** Callback when user scrolls near the end. Use with hasNextPage to avoid duplicate fetches. */
 	onEndReached?: () => void;
-	/** When false, onEndReached will not be called (e.g. no more pages). */
 	hasNextPage?: boolean;
-	/**
-	 * Setter injected by VirtualizedScrollbars via cloneElement(children, { scrollerRef }).
-	 * Pass it so the same DOM element is used for both OverlayScrollbars and the virtualizer.
-	 */
 	scrollerRef?: (element: HTMLElement | null) => void;
-	/** Fixed row height in px, or a function (index) => height. */
 	estimateSize: number | ((index: number) => number);
-	/** Number of items to render outside the visible area. Default 25. */
 	overscan?: number;
-	/** Optional data array; when provided, each virtual item will have a .data property. */
 	items?: T[];
-	/**
-	 * When true, enable dynamic row height: pass measureElement as ref to each row node and set data-index
-	 * to the virtual item index. Do not set a fixed height on rows; use minHeight with estimateSize for initial layout.
-	 */
 	measure?: boolean;
 };
 
 export type AppVirtualItem<T = unknown> = VirtualItem & { data?: T };
 
 export type UseAppVirtualizerResult<T = unknown> = {
-	/** Virtual items to render; position each with transform: translateY(item.start). */
 	virtualItems: AppVirtualItem<T>[];
-	/** Total scrollable height; set this as the height of the inner content wrapper. */
 	totalSize: number;
-	/**
-	 * Attach this ref to the scroll container (the div with overflow: auto).
-	 * When used inside VirtualizedScrollbars, the parent receives scrollerRef and must pass it to this hook
-	 * so the same element is used for scrollbars and virtualization.
-	 */
 	scrollContainerRef: (element: HTMLElement | null) => void;
-	/** Scroll to a given index (e.g. for EmojiPicker category). */
 	scrollToIndex: (index: number, options?: { align?: 'start' | 'center' | 'end'; behavior?: 'auto' | 'smooth' }) => void;
-	/**
-	 * When measure option is true, attach this ref to each row root element and set data-index={virtualItem.index}
-	 * so the virtualizer can measure actual row height. Omit fixed height on the row; use minHeight for initial layout.
-	 */
 	measureElement?: (element: HTMLElement | null) => void;
 };
 
@@ -106,8 +76,7 @@ export function useAppVirtualizer<T = unknown>(options: UseAppVirtualizerOptions
 	const virtualItems = virtualizer.getVirtualItems();
 	const baseTotalSize = virtualizer.getTotalSize();
 	const sizePerItem = normalizeEstimateSize(estimateSize, 0);
-	const spacerSize =
-		totalCount != null && totalCount > count ? (totalCount - count) * sizePerItem : 0;
+	const spacerSize = totalCount != null && totalCount > count ? (totalCount - count) * sizePerItem : 0;
 	const totalSize = baseTotalSize + spacerSize;
 
 	totalSizeRef.current = totalSize;
