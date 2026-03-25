@@ -78,7 +78,10 @@ export function useAppVirtualizer<T = unknown>(options: UseAppVirtualizerOptions
 	// visible items + the number of pre-loaded items
 	const virtualItems = virtualizer.getVirtualItems();
 	const baseTotalSize = virtualizer.getTotalSize();
-	const sizePerItem = normalizeEstimateSize(estimateSize, 0);
+	const sizePerItem =
+		virtualItems.length > 0
+			? virtualItems.reduce((sum, item) => sum + item.size, 0) / virtualItems.length
+			: normalizeEstimateSize(estimateSize, 0);
 	const spacerSize = totalCount != null && totalCount > count ? (totalCount - count) * sizePerItem : 0;
 	const totalSize = baseTotalSize + spacerSize;
 
