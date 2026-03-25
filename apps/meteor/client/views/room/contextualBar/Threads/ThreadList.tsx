@@ -37,6 +37,7 @@ type ThreadListVirtualizedContentProps = {
 	hasNextPage: boolean;
 	subscription?: ReturnType<typeof useRoomSubscription>;
 	onThreadClick: (tmid: IMessage['_id']) => void;
+	resetKey?: unknown;
 };
 
 const ThreadListVirtualizedContent = memo(function ThreadListVirtualizedContent({
@@ -49,6 +50,7 @@ const ThreadListVirtualizedContent = memo(function ThreadListVirtualizedContent(
 	hasNextPage,
 	subscription,
 	onThreadClick,
+	resetKey,
 }: ThreadListVirtualizedContentProps) {
 	const { virtualItems, totalSize, scrollContainerRef, measureElement } = useAppVirtualizer<IThreadMainMessage>({
 		width: inlineSize,
@@ -62,6 +64,7 @@ const ThreadListVirtualizedContent = memo(function ThreadListVirtualizedContent(
 		overscan: 25,
 		items,
 		measure: true,
+		resetKey,
 	});
 
 	return (
@@ -243,6 +246,7 @@ const ThreadList = () => {
 								hasNextPage={hasNextPage ?? false}
 								subscription={subscription}
 								onThreadClick={handleThreadClick}
+								resetKey={options}
 							/>
 						</VirtualizedScrollbars>
 					)}

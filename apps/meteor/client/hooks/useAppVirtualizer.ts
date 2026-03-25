@@ -18,6 +18,7 @@ export type UseAppVirtualizerOptions<T = unknown> = {
 	overscan?: number;
 	items?: T[];
 	measure?: boolean;
+	resetKey?: unknown;
 };
 
 export type AppVirtualItem<T = unknown> = VirtualItem & { data?: T };
@@ -47,6 +48,7 @@ export function useAppVirtualizer<T = unknown>(options: UseAppVirtualizerOptions
 		overscan = DEFAULT_OVERSCAN,
 		items,
 		measure = false,
+		resetKey,
 	} = options;
 
 	const scrollRef = useRef<HTMLElement | null>(null);
@@ -73,6 +75,7 @@ export function useAppVirtualizer<T = unknown>(options: UseAppVirtualizerOptions
 		[scrollerRef],
 	);
 
+	// visible items + the number of pre-loaded items
 	const virtualItems = virtualizer.getVirtualItems();
 	const baseTotalSize = virtualizer.getTotalSize();
 	const sizePerItem = normalizeEstimateSize(estimateSize, 0);
@@ -83,6 +86,14 @@ export function useAppVirtualizer<T = unknown>(options: UseAppVirtualizerOptions
 	heightRef.current = height;
 	onEndReachedRef.current = onEndReached;
 	hasNextPageRef.current = hasNextPage;
+
+	// Reset scroll position and end-reached gate when the data source changes
+	useEffect(() => {
+		if (scrollRef.current) {
+			scrollRef.current.scrollTop = 0;
+		}
+		endReachedSentRef.current = false;
+	}, [resetKey]);
 
 	// Reset endReachedSentRef when more items were loaded so we can trigger the next page
 	useEffect(() => {
