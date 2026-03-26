@@ -3,12 +3,18 @@ import { expect } from 'chai';
 import { parseMessageSearchQuery } from '../../../../server/lib/parseMessageSearchQuery';
 import { createFakeUser } from '../../../mocks/data';
 
+/** Builds the same date as parseMessageSearchQuery for before/after/on (server local midnight + offset). */
+function toQueryDate(year: number, month: number, day: number, userUtcOffset?: number): Date {
+	userUtcOffset = userUtcOffset ?? 0;
+	const d = new Date(year, month - 1, day);
+	d.setUTCHours(d.getUTCHours() + d.getTimezoneOffset() / 60 + userUtcOffset);
+	return d;
+}
+
 describe('parseMessageSearchQuery', () => {
 	const params = {
 		user: createFakeUser(),
 	};
-
-	const utcOffset = new Date().getTimezoneOffset() / 60;
 
 	[
 		{
@@ -175,17 +181,22 @@ describe('parseMessageSearchQuery', () => {
 		},
 		{
 			text: 'before:01-01-2023',
-			query: { ts: { $lte: new Date(2023, 0, 1, utcOffset) } },
+			query: { ts: { $lte: toQueryDate(2023, 1, 1) } },
 			options: { projection: {}, sort: { ts: -1 }, skip: 0, limit: 20 },
 		},
 		{
 			text: 'after:01-01-2023',
-			query: { ts: { $gte: new Date(2023, 0, 2, utcOffset) } },
+			query: { ts: { $gte: toQueryDate(2023, 1, 2) } },
 			options: { projection: {}, sort: { ts: -1 }, skip: 0, limit: 20 },
 		},
 		{
 			text: 'on:01-01-2023',
-			query: { ts: { $gte: new Date(2023, 0, 1, utcOffset), $lt: new Date(2023, 0, 2, utcOffset) } },
+			query: (() => {
+				const start = toQueryDate(2023, 1, 1);
+				const dayAfter = new Date(start);
+				dayAfter.setDate(dayAfter.getDate() + 1);
+				return { ts: { $gte: start, $lt: dayAfter } };
+			})(),
 			options: { projection: {}, sort: { ts: -1 }, skip: 0, limit: 20 },
 		},
 		{

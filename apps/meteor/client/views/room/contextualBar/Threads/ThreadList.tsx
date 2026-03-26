@@ -14,9 +14,9 @@ import {
 } from '@rocket.chat/ui-client';
 import { useTranslation, useUserId, useRoomToolbox } from '@rocket.chat/ui-contexts';
 import type { FormEvent } from 'react';
-import { useMemo, useState, useCallback } from 'react';
-import { Virtuoso } from 'react-virtuoso';
+import { useMemo, useState, useCallback, memo } from 'react';
 
+import { useAppVirtualizer } from '../../../../hooks/useAppVirtualizer';
 import ThreadListItem from './components/ThreadListItem';
 import { useThreadsList } from './hooks/useThreadsList';
 import { getErrorMessage } from '../../../../lib/errorHandling';
@@ -24,6 +24,90 @@ import { useRoom, useRoomSubscription } from '../../contexts/RoomContext';
 import { useGoToThread } from '../../hooks/useGoToThread';
 
 type ThreadType = 'all' | 'following' | 'unread';
+
+const THREAD_LIST_ITEM_ESTIMATE_SIZE = 84;
+
+type ThreadListVirtualizedContentProps = {
+	scrollerRef?: (element: HTMLElement | null) => void;
+	items: IThreadMainMessage[];
+	itemCount: number;
+	inlineSize: number;
+	blockSize: number;
+	fetchNextPage: () => void;
+	hasNextPage: boolean;
+	subscription?: ReturnType<typeof useRoomSubscription>;
+	onThreadClick: (tmid: IMessage['_id']) => void;
+	resetKey?: unknown;
+};
+
+const ThreadListVirtualizedContent = memo(function ThreadListVirtualizedContent({
+	scrollerRef,
+	items,
+	itemCount,
+	inlineSize,
+	blockSize,
+	fetchNextPage,
+	hasNextPage,
+	subscription,
+	onThreadClick,
+	resetKey,
+}: ThreadListVirtualizedContentProps) {
+	const { virtualItems, totalSize, scrollContainerRef, measureElement } = useAppVirtualizer<IThreadMainMessage>({
+		width: inlineSize,
+		height: blockSize,
+		count: items.length,
+		totalCount: itemCount,
+		onEndReached: fetchNextPage,
+		hasNextPage,
+		scrollerRef,
+		estimateSize: THREAD_LIST_ITEM_ESTIMATE_SIZE,
+		overscan: 25,
+		items,
+		measure: true,
+		resetKey,
+	});
+
+	return (
+		<Box
+			ref={scrollContainerRef}
+			style={{
+				width: inlineSize,
+				height: blockSize,
+				overflow: 'auto',
+			}}
+			tabIndex={-1}
+		>
+			<Box style={{ height: totalSize, width: '100%', position: 'relative' }}>
+				{virtualItems.map((virtualItem) => (
+					<div
+						key={virtualItem.key}
+						ref={measureElement}
+						data-index={virtualItem.index}
+						style={{
+							position: 'absolute',
+							top: 0,
+							left: 0,
+							width: '100%',
+							minHeight: THREAD_LIST_ITEM_ESTIMATE_SIZE,
+							transform: `translateY(${virtualItem.start}px)`,
+							willChange: 'transform',
+						}}
+					>
+						{virtualItem.data && (
+							<ThreadListItem
+								thread={virtualItem.data}
+								unread={subscription?.tunread ?? []}
+								unreadUser={subscription?.tunreadUser ?? []}
+								unreadGroup={subscription?.tunreadGroup ?? []}
+								onClick={onThreadClick}
+							/>
+						)}
+					</div>
+				))}
+			</Box>
+		</Box>
+	);
+});
 
 const ThreadList = () => {
 	const t = useTranslation();
@@ -103,7 +187,7 @@ const ThreadList = () => {
 		300,
 	);
 
-	const { isPending, error, isSuccess, data, fetchNextPage } = useThreadsList(options);
+	const { isPending, error, isSuccess, data, fetchNextPage, hasNextPage } = useThreadsList(options);
 
 	const items = data?.items || [];
 	const itemCount = data?.itemCount ?? 0;
@@ -153,24 +237,16 @@ const ThreadList = () => {
 				<Box flexGrow={1} flexShrink={1} overflow='hidden' display='flex' ref={ref}>
 					{!error && itemCount > 0 && items.length > 0 && (
 						<VirtualizedScrollbars>
-							<Virtuoso
-								style={{
-									height: blockSize,
-									width: inlineSize,
-								}}
-								totalCount={itemCount}
-								endReached={() => fetchNextPage()}
-								overscan={25}
-								data={items}
-								itemContent={(_index, data: IThreadMainMessage) => (
-									<ThreadListItem
-										thread={data}
-										unread={subscription?.tunread ?? []}
-										unreadUser={subscription?.tunreadUser ?? []}
-										unreadGroup={subscription?.tunreadGroup ?? []}
-										onClick={handleThreadClick}
-									/>
-								)}
+							<ThreadListVirtualizedContent
+								items={items}
+								itemCount={itemCount}
+								inlineSize={inlineSize}
+								blockSize={blockSize}
+								fetchNextPage={fetchNextPage}
+								hasNextPage={hasNextPage ?? false}
+								subscription={subscription}
+								onThreadClick={handleThreadClick}
+								resetKey={options}
 							/>
 						</VirtualizedScrollbars>
 					)}
