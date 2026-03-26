@@ -12,7 +12,6 @@ jest.mock('../../contexts/RoomContext', () => ({
 	useRoomSubscription: () => fakeRoom,
 }));
 
-// TODO: Create a function to mock the lib/i18n to be used with mockAppRoot
 jest.mock('../../../../../app/utils/lib/i18n', () => ({
 	t: (key: string) => key,
 }));
@@ -32,4 +31,3 @@ describe('ThreadList Component', () => {
 		expect(await screen.findByText('error-not-allowed')).toBeInTheDocument();
 	});
 });
-

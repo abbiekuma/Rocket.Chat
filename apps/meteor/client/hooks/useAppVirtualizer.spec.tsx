@@ -1,6 +1,5 @@
 import { render, screen, act } from '@testing-library/react';
-import type { ReactElement } from 'react';
-import React, { useRef } from 'react';
+import { useRef, type ReactElement } from 'react';
 
 import { useAppVirtualizer } from './useAppVirtualizer';
 
@@ -14,6 +13,7 @@ const TestComponent = ({
 	onEndReached,
 	hasNextPage = true,
 	measure = false,
+	resetKey,
 }: {
 	width?: number;
 	height?: number;
@@ -22,6 +22,7 @@ const TestComponent = ({
 	onEndReached?: () => void;
 	hasNextPage?: boolean;
 	measure?: boolean;
+	resetKey?: unknown;
 }): ReactElement => {
 	const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -40,6 +41,7 @@ const TestComponent = ({
 		overscan: 0,
 		items: ITEMS.slice(0, count),
 		measure,
+		resetKey,
 	});
 
 	return (
@@ -89,7 +91,6 @@ describe('useAppVirtualizer', () => {
 
 		const rows = await screen.findAllByTestId('row');
 		expect(rows.length).toBeGreaterThan(0);
-		// Virtualizer may render a range (e.g. indices 2–4); first row in DOM might not be index 0
 		const dataIndex = rows[0].getAttribute('data-index');
 		expect(dataIndex).not.toBeNull();
 		const index = Number.parseInt(dataIndex ?? '', 10);
@@ -102,7 +103,6 @@ describe('useAppVirtualizer', () => {
 
 		const inner = screen.getByTestId('inner');
 		const height = Number.parseFloat(inner.style.height || '0');
-		// 2 visible items * 50 + 2 spacer * 50 = 200
 		expect(height).toBeGreaterThanOrEqual(200);
 	});
 
@@ -122,5 +122,51 @@ describe('useAppVirtualizer', () => {
 		});
 
 		expect(onEndReached).toHaveBeenCalled();
+	});
+
+	it('resets scrollTop to 0 when resetKey changes', () => {
+		const { rerender } = render(<TestComponent resetKey='key-1' />);
+
+		const container = screen.getByTestId('scroll-container');
+
+		act(() => {
+			Object.defineProperty(container, 'scrollTop', { value: 300, writable: true, configurable: true });
+		});
+		expect(container.scrollTop).toBe(300);
+
+		act(() => {
+			rerender(<TestComponent resetKey='key-2' />);
+		});
+
+		expect(container.scrollTop).toBe(0);
+	});
+
+	it('allows onEndReached to fire again after resetKey changes', () => {
+		const onEndReached = jest.fn();
+
+		const { rerender } = render(<TestComponent onEndReached={onEndReached} count={20} totalCount={20} resetKey='key-1' />);
+
+		const container = screen.getByTestId('scroll-container');
+
+		act(() => {
+			Object.defineProperty(container, 'scrollTop', { value: 1000, writable: true, configurable: true });
+			container.dispatchEvent(new Event('scroll'));
+		});
+		expect(onEndReached).toHaveBeenCalledTimes(1);
+		onEndReached.mockClear();
+
+		act(() => {
+			container.dispatchEvent(new Event('scroll'));
+		});
+		expect(onEndReached).not.toHaveBeenCalled();
+		act(() => {
+			rerender(<TestComponent onEndReached={onEndReached} count={20} totalCount={20} resetKey='key-2' />);
+		});
+
+		act(() => {
+			Object.defineProperty(container, 'scrollTop', { value: 1000, writable: true, configurable: true });
+			container.dispatchEvent(new Event('scroll'));
+		});
+		expect(onEndReached).toHaveBeenCalledTimes(1);
 	});
 });
